@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>System Error</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --error-bg: #0f1115;
+      --error-text: #e5e7eb;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+
+      --love-bg: #fff1f2;
+      --love-text: #881337;
+      --accent: #fb7185;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Source Code Pro', monospace;
+      background: #ffffff; /* base, animation will override */
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.8s ease, color 0.8s ease;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      padding: 32px;
+      text-align: center;
+
+      position: relative; /* keep modal above the page collage */
+      z-index: 2;           /* above the full-screen collage */
+      overflow: visible;
+
+      background: #ffffff;              /* white modal */
+      color: #000000;                   /* dark text */
+      border: 2px solid #ef4444;
+      border-radius: 12px;
+
+      box-shadow:
+        0 0 0 4px rgba(239, 68, 68, 0.15),
+        0 20px 40px rgba(0, 0, 0, 0.25);
+    }
+
+    h1 {
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+    }
+
+    .error-code {
+      color: var(--danger);
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .subtext {
+      font-size: 0.9rem;
+      opacity: 0.8;
+      margin-bottom: 24px;
+    }
+
+    .progress {
+      height: 8px;
+      background: #ffffff; /* track color: white so the remaining gap is white */
+      border-radius: 4px;
+      overflow: hidden;
+      /* lighter outer outline so it remains visible even when the filled bar pulses */
+      box-shadow: 0 0 0 2px rgba(156,163,175,0.9);
+      margin-bottom: 16px;
+    }
+
+    .progress-bar {
+      width: 95%;
+      height: 100%;
+      background: #22c55e; /* green */
+      border-radius: 4px; /* match track rounding */
+    }
+
+    /* Collage background used in the success step (full-screen) */
+    .collage {
+      position: fixed; /* cover the viewport */
+      inset: 0; /* fill the viewport */
+      z-index: 0; /* behind the content */
+      pointer-events: auto; /* allow interaction with images */
+    }
+
+    .collage-img {
+      position: absolute;
+      will-change: transform, opacity;
+      transition: transform 600ms ease, opacity 600ms ease;
+      border-radius: 8px;
+      box-shadow: 0 6px 20px rgba(2,6,23,0.15);
+      opacity: 0.95;
+      mix-blend-mode: normal;
+      cursor: grab;
+      user-select: none;
+      touch-action: none; /* we'll handle pointer events */
+    }
+
+    .collage-img.dragging {
+      cursor: grabbing;
+      transition: none !important;
+      opacity: 1;
+      box-shadow: 0 12px 30px rgba(2,6,23,0.25);
+    }
+
+    .collage-img.focused {
+      z-index: 9999;
+      transform: translate(-50%, -50%) scale(1.25) !important;
+      left: 50% !important;
+      top: 50% !important;
+      box-shadow: 0 30px 60px rgba(2,6,23,0.45) !important;
+    }
+
+    /* When step4 is shown we add a subtle entrance for the images */
+    #step4.show .collage-img {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* ensure step4 content sits above the collage */
+    #step4 > :not(.collage) {
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+
+    @keyframes emergencyFlash {
+      0%   { background-color: #ffffff; }
+      50%  { background-color: #ef4444; }
+      100% { background-color: #ffffff; }
+    }
+
+    /* Flashing background for error mode */
+    body.error {
+      animation: emergencyFlash 0.8s infinite;
+    }
+
+    button {
+      background: transparent;
+      border: 2px solid var(--warning);
+      color: var(--warning);
+      padding: 12px 20px;
+      font-family: inherit;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 16px;
+    }
+
+    button:hover {
+      background: var(--warning);
+      color: #fff;
+    }
+
+    /* success-style for specific action buttons */
+    .btn-success {
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+
+    .btn-success:hover {
+      background: #22c55e;
+      color: #fff;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Diagnostics */
+    .log {
+      text-align: left;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin-top: 20px;
+    }
+
+    .pass { color: #22c55e; }
+    .fail { color: #ef4444; }
+
+    /* Love mode */
+    body.love {
+      background: var(--love-bg);
+      color: var(--love-text);
+      font-family: 'Inter', sans-serif;
+    }
+
+    body.love button {
+      border-color: var(--accent);
+      color: white;
+      background: var(--accent);
+    }
+
+    body.love button:hover {
+      transform: scale(1.05);
+    }
+
+    .heart {
+      font-size: 2rem;
+      margin-bottom: 16px;
+      animation: float 2s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+      100% { transform: translateY(0); }
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      padding: 32px;
+      text-align: center;
+
+      background: #ffffff; /* ensure white background */
+      color: #000000;      /* ensure black text */
+      position: relative;
+      z-index: 2;
+      border: 2px solid #ef4444;
+      border-radius: 12px;
+
+      box-shadow:
+        0 0 0 4px rgba(239, 68, 68, 0.15),
+        0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+  </style>
+</head>
+<body class="error">
+
+  <div id="collage" class="collage" aria-hidden="true"></div>
+
+  <div class="container">
+
+    <!-- STEP 1: ERROR -->
+    <div id="step1">
+      <h1>⚠️ SYSTEM ERROR</h1>
+      <div class="error-code">ERROR 214: Valentine Not Assigned</div>
+
+      <p class="subtext">
+        The system detected that February 14th is approaching<br>
+        and no Valentine has been selected.
+      </p>
+
+      <div class="progress">
+        <div class="progress-bar"></div>
+      </div>
+
+      <p class="subtext">Attempting automatic fix…</p>
+
+  <button class="btn-success" onclick="goToDiagnostics()">🔧 Fix Error</button>
+      <p class="subtext">This action may result in smiles.</p>
+    </div>
+
+    <!-- STEP 2: DIAGNOSTICS -->
+    <div id="step2" class="hidden">
+      <h1>Running diagnostics…</h1>
+
+      <div class="log">
+        <div class="pass">✔ Compatibility check… PASSED</div>
+        <div class="pass">✔ Sense of humor… PASSED</div>
+        <div class="pass">✔ Ability to make February better… PASSED</div>
+        <div class="fail">✖ Valentine status… NOT SET</div>
+      </div>
+
+      <p class="subtext" style="margin-top:20px;">Manual input required.</p>
+
+  <button class="btn-success" onclick="assignValentine()">Assign Valentine</button>
+    </div>
+
+    <!-- STEP 3: REVEAL -->
+    <div id="step3" class="hidden">
+      <div class="heart">❤️</div>
+      <h1>Error resolved.</h1>
+      <p class="subtext">Valentine successfully assigned.</p>
+
+      <h2 style="margin-top:28px;">
+        Will you be my Valentine?
+      </h2>
+
+      <!-- You can change button text here -->
+      <button onclick="finalMessage()">Yes 💖</button>
+    </div>
+
+    <!-- STEP 4: SUCCESS -->
+    <div id="step4" class="hidden">
+      <div class="heart">💖</div>
+      <h1>Success</h1>
+      <p class="subtext">
+        Thank you for fixing this critical issue.<br>
+        System morale has increased by 100%.
+      </p>
+      <p class="subtext">Best fix ever applied.</p>
+    </div>
+
+  </div>
+
+  <script>
+  function goToDiagnostics() {
+    document.getElementById('step1').classList.add('hidden');
+    document.getElementById('step2').classList.remove('hidden');
+  }
+
+  function assignValentine() {
+    document.getElementById('step2').classList.add('hidden');
+    document.getElementById('step3').classList.remove('hidden');
+
+    document.body.classList.remove('error'); // STOP flashing
+    document.body.classList.add('love');     // START romance
+  }
+
+  // list of images inside the /images directory (automatically populated)
+  const collageImages = [
+    "DSC00473.JPG",
+    "DSC00474.JPG",
+    "IMG_0341.jpg",
+    "IMG_0432.jpg",
+    "IMG_0573.JPG",
+    "IMG_0592.JPG",
+    "IMG_0745.jpg",
+    "IMG_1538.JPG",
+    "IMG_2069.jpeg",
+    "IMG_2975.jpg",
+    "IMG_4438.jpg",
+    "IMG_4547.jpg",
+    "IMG_4554.jpg",
+    "IMG_6595.jpg",
+    "IMG_6822.jpg",
+    "IMG_6868.jpg",
+    "IMG_7492.jpg",
+    "IMG_7493.jpg",
+    "IMG_7601.jpg",
+    "IMG_8105.jpg",
+    "IMG_8127.jpg",
+    "IMG_8357.JPG",
+    "IMG_8389.jpg",
+    "IMG_8396.jpg",
+    "IMG_8402.jpg",
+    "IMG_8442.JPG",
+    "IMG_8446.jpg",
+    "IMG_8447.jpg",
+    "IMG_8460.jpg",
+    "IMG_8489.jpg",
+    "IMG_8491.jpg",
+    "IMG_8493.jpg",
+    "IMG_8575.jpg",
+    "IMG_8630.jpg",
+    "IMG_8770.JPG",
+    "IMG_8811.jpg",
+    "IMG_8824.jpg",
+    "IMG_8830.JPG",
+    "IMG_8900.JPG",
+    "IMG_8927.jpg",
+    "IMG_9372.JPG",
+    "IMG_9398.jpg",
+    "IMG_9498.jpeg",
+    "IMG_9522.jpg",
+    "IMG_9695.jpg",
+    "IMG_9770.jpg",
+    "IMG_9794.jpg",
+    "IMG_9900.jpg",
+    "IMG_1163.jpg",
+    "IMG_0052.jpg",
+    "IMG_5870.jpg"
+  ];
+
+  function populateCollage() {
+    const collage = document.getElementById('collage');
+    if (!collage || collage.dataset.populated) return;
+    // Layout images in a responsive grid that covers the viewport.
+    // This spaces images so the entire screen is filled while keeping a playful collage feel.
+    const n = collageImages.length;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const aspect = vw / Math.max(vh, 1);
+
+  // Estimate number of columns to better fill the viewport (wider view -> more columns)
+  // Reduce the column count slightly so tiles are larger and images can be bigger
+  // which helps ensure the collage can bleed to the viewport edges.
+  let cols = Math.ceil(Math.sqrt(n * aspect) * 0.7);
+  cols = Math.max(1, cols);
+    const rows = Math.ceil(n / cols);
+
+    const tileW = 100 / cols; // percent
+    const tileH = 100 / rows; // percent
+
+    let index = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (index >= n) break;
+        const file = collageImages[index];
+        const img = document.createElement('img');
+        img.src = `images/${file}`;
+        img.loading = 'lazy';
+        img.className = 'collage-img';
+
+        // Base rotation and upright fixes
+        const baseRotate = (Math.random() * 30) - 15; // -15..15 deg for a subtle tilt
+        const uprightFix = (file === 'IMG_4438.jpg' || file === 'IMG_4547.jpg' || file === 'IMG_4554.jpg');
+        img.dataset.rotate = uprightFix ? ((baseRotate + 180) % 360) : baseRotate;
+        const appliedRotate = Number(img.dataset.rotate);
+
+        // Slight randomness within each grid cell so layout feels organic
+    const jitterX = (Math.random() - 0.5) * tileW * 0.28; // percent of tile width (even bigger spread)
+    const jitterY = (Math.random() - 0.5) * tileH * 0.28; // percent of tile height (even bigger spread)
+
+        // Make images slightly larger than the tile to avoid visible gaps
+    // Increase the size multiplier so images are noticeably larger within their tiles
+    // (approx 125% - 175% of the tile width). This gives denser coverage across screens.
+    const sizePercent = tileW * (1.25 + Math.random() * 0.5); // ~125% - 175% of tile width
+
+        const left = c * tileW + (tileW - sizePercent) / 2 + jitterX;
+        const top = r * tileH + (tileH - (tileH * (sizePercent / tileW))) / 2 + jitterY;
+
+        img.style.width = sizePercent + '%';
+  // clamp left/top so images can reach the very edges — use the same width-percent
+  // for top clamping as well to avoid gaps at the bottom/right caused by
+  // mixing width-based sizing with a height-based clamp.
+  img.style.left = Math.max(0, Math.min(100 - sizePercent, left)) + '%';
+  img.style.top = Math.max(0, Math.min(100 - sizePercent, top)) + '%';
+        img.style.opacity = '0';
+        img.style.transform = `rotate(${appliedRotate}deg) translateY(10px)`;
+
+        collage.appendChild(img);
+        // staggered entrance
+        setTimeout(() => {
+          img.style.opacity = '0.95';
+          img.style.transform = `rotate(${appliedRotate}deg) translateY(0)`;
+        }, 80 + index * 40);
+
+        index++;
+      }
+    }
+
+    collage.dataset.populated = '1';
+  }
+
+  // enable dragging, double-click to open, and keyboard close for the collage images
+  function enableCollageInteraction() {
+    const collage = document.getElementById('collage');
+    if (!collage) return;
+
+    // delegate pointer events to images when they are added
+    collage.addEventListener('pointerdown', (e) => {
+      const img = e.target.closest('.collage-img');
+      if (!img) return;
+      e.preventDefault();
+      img.setPointerCapture(e.pointerId);
+
+      // record initial pointer offset
+      const rect = img.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+      img.dataset.dragging = '1';
+      img.classList.add('dragging');
+      img._dragOffset = { offsetX, offsetY };
+      img._initialLeft = rect.left;
+      img._initialTop = rect.top;
+    });
+
+    collage.addEventListener('pointermove', (e) => {
+      const img = e.target.closest('.collage-img');
+      if (!img || !img.dataset.dragging) return;
+      const { offsetX, offsetY } = img._dragOffset || { offsetX:0, offsetY:0 };
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const rect = img.getBoundingClientRect();
+      const newLeft = e.clientX - offsetX;
+      const newTop = e.clientY - offsetY;
+      // clamp
+      const clampedLeft = Math.max(0, Math.min(newLeft, vw - rect.width));
+      const clampedTop = Math.max(0, Math.min(newTop, vh - rect.height));
+      img.style.left = clampedLeft + 'px';
+      img.style.top = clampedTop + 'px';
+      // preserve rotation
+      const rotate = img.dataset.rotate || 0;
+      img.style.transform = `rotate(${rotate}deg)`;
+    });
+
+    collage.addEventListener('pointerup', (e) => {
+      const img = e.target.closest('.collage-img');
+      if (!img || !img.dataset.dragging) return;
+      img.releasePointerCapture(e.pointerId);
+      delete img.dataset.dragging;
+      img.classList.remove('dragging');
+      // normalize left/top from px to percent so future shuffles still behave
+      const rect = img.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      img.style.left = (rect.left / vw * 100) + '%';
+      img.style.top = (rect.top / vh * 100) + '%';
+      const rotate = img.dataset.rotate || 0;
+      img.style.transform = `rotate(${rotate}deg)`;
+    });
+
+    // double-click to open large view
+    collage.addEventListener('dblclick', (e) => {
+      const img = e.target.closest('.collage-img');
+      if (!img) return;
+      openLightbox(img.src);
+    });
+
+    // Proximity-based hover repulsion
+    // Hovering moves nearby images away so covered images become visible.
+    const HOVER_RADIUS = 180; // px influence radius
+    const MAX_PUSH = 140; // px maximum push distance
+
+    function onPointerMove(e) {
+      const imgs = Array.from(collage.querySelectorAll('.collage-img'));
+      // origin: if hovering an image, use its center; otherwise use pointer
+      const hovered = e.target.closest('.collage-img');
+      let originX = e.clientX;
+      let originY = e.clientY;
+      if (hovered) {
+        const r = hovered.getBoundingClientRect();
+        originX = r.left + r.width / 2;
+        originY = r.top + r.height / 2;
+      }
+
+      imgs.forEach((img) => {
+        if (img.dataset.dragging) return; // don't interfere with dragging
+        const rect = img.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dx = cx - originX;
+        const dy = cy - originY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < HOVER_RADIUS) {
+          // normalized direction away from origin
+          const nx = dx / (dist || 1);
+          const ny = dy / (dist || 1);
+          const strength = (1 - dist / HOVER_RADIUS);
+          const push = strength * MAX_PUSH;
+          const px = Math.round(nx * push);
+          const py = Math.round(ny * push);
+          const rotate = parseFloat(img.dataset.rotate || 0);
+          img.style.transition = 'transform 320ms cubic-bezier(.2,.8,.2,1)';
+          img.style.transform = `rotate(${rotate}deg) translate(${px}px, ${py}px) scale(${1 + strength * 0.08})`;
+          img.style.zIndex = 1000 + Math.round(strength * 100);
+        } else {
+          // reset to base rotation
+          const rotate = parseFloat(img.dataset.rotate || 0);
+          img.style.transition = 'transform 420ms ease';
+          img.style.transform = `rotate(${rotate}deg)`;
+          img.style.zIndex = '';
+        }
+      });
+    }
+
+    function onPointerLeave() {
+      const imgs = Array.from(collage.querySelectorAll('.collage-img'));
+      imgs.forEach((img) => {
+        if (img.dataset.dragging) return;
+        const rotate = parseFloat(img.dataset.rotate || 0);
+        img.style.transition = 'transform 420ms ease';
+        img.style.transform = `rotate(${rotate}deg)`;
+        img.style.zIndex = '';
+      });
+    }
+
+    collage.addEventListener('pointermove', onPointerMove);
+    collage.addEventListener('pointerleave', onPointerLeave);
+  }
+
+  function openLightbox(src) {
+    // create overlay
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(0,0,0,0.85)';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = 99999;
+    overlay.style.cursor = 'zoom-out';
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.maxWidth = '90%';
+    img.style.maxHeight = '90%';
+    img.style.borderRadius = '8px';
+    img.style.boxShadow = '0 20px 60px rgba(0,0,0,0.6)';
+
+    overlay.appendChild(img);
+    document.body.appendChild(overlay);
+
+    function close() {
+      window.removeEventListener('keydown', onKey);
+      overlay.remove();
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    overlay.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+  }
+
+  // Shuffle positions/sizes of collage images
+  function shuffleCollage() {
+    const collage = document.getElementById('collage');
+    if (!collage) return;
+    const imgs = Array.from(collage.querySelectorAll('.collage-img'));
+    imgs.forEach((img, i) => {
+      const size = 12 + Math.random() * 28; // 12-40%
+      const left = Math.random() * 88;
+      const top = Math.random() * 88;
+      const rotate = (Math.random() * 50) - 25;
+      img.dataset.rotate = rotate;
+      // animate to new position
+      img.style.transition = 'transform 600ms ease, left 600ms ease, top 600ms ease, width 600ms ease';
+      img.style.width = size + '%';
+      img.style.left = left + '%';
+      img.style.top = top + '%';
+      img.style.transform = `rotate(${rotate}deg)`;
+    });
+  }
+
+
+  function finalMessage() {
+    document.getElementById('step3').classList.add('hidden');
+    const step4 = document.getElementById('step4');
+    step4.classList.remove('hidden');
+
+    // populate collage (once) and animate in
+    populateCollage();
+    // enable interactions after population
+    setTimeout(enableCollageInteraction, 300);
+    setTimeout(() => step4.classList.add('show'), 120);
+  }
+</script>
+
+</body>
+</html>
