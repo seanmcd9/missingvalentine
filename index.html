@@ -84,11 +84,13 @@
     }
 
     .progress-bar {
-      width: 95%;
+      width: 0%; /* start at 0%, JS will animate to 95% */
       height: 100%;
       background: #22c55e; /* green */
       border-radius: 4px; /* match track rounding */
     }
+
+    /* progress bar animation starts/controlled by JS (no pulsing) */
 
     /* Collage background used in the success step (full-screen) */
     .collage {
@@ -199,6 +201,41 @@
     .pass { color: #22c55e; }
     .fail { color: #ef4444; }
 
+    /* Animated diagnostics styles */
+    .diag-item {
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .diag-label {
+      flex: 1 1 auto;
+      text-align: left;
+      font-size: 0.95rem;
+      color: #111827;
+    }
+    .diag-track {
+      width: 140px;
+      height: 10px;
+      background: #e6e6e6;
+      border-radius: 6px;
+      overflow: hidden;
+      flex: 0 0 auto;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.03);
+    }
+    .diag-fill {
+      height: 100%;
+      width: 0%;
+      background: #22c55e;
+      transition: width 700ms cubic-bezier(.2,.9,.2,1), background 300ms ease;
+    }
+    .diag-status {
+      min-width: 86px;
+      text-align: right;
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+
     /* Love mode */
     body.love {
       background: var(--love-bg);
@@ -245,6 +282,8 @@
         0 0 0 4px rgba(239, 68, 68, 0.15),
         0 20px 40px rgba(0, 0, 0, 0.6);
     }
+
+    /* sound UI removed */
   </style>
 </head>
 <body class="error">
@@ -259,8 +298,7 @@
       <div class="error-code">ERROR 214: Valentine Not Assigned</div>
 
       <p class="subtext">
-        The system detected that February 14th is approaching<br>
-        and no Valentine has been selected.
+        The system detected that February 14th is approaching and no Valentine has been selected.
       </p>
 
       <div class="progress">
@@ -270,30 +308,26 @@
       <p class="subtext">Attempting automatic fix…</p>
 
   <button class="btn-success" onclick="goToDiagnostics()">🔧 Fix Error</button>
-      <p class="subtext">This action may result in smiles.</p>
+      <p class="subtext">This action may result in happiness.</p>
     </div>
 
     <!-- STEP 2: DIAGNOSTICS -->
     <div id="step2" class="hidden">
       <h1>Running diagnostics…</h1>
 
-      <div class="log">
-        <div class="pass">✔ Compatibility check… PASSED</div>
-        <div class="pass">✔ Sense of humor… PASSED</div>
-        <div class="pass">✔ Ability to make February better… PASSED</div>
-        <div class="fail">✖ Valentine status… NOT SET</div>
-      </div>
+      <!-- Animated diagnostics area: checks will be displayed and animated here -->
+      <div id="diagnostics" class="log" aria-live="polite"></div>
 
-      <p class="subtext" style="margin-top:20px;">Manual input required.</p>
+  <p id="manual-input" class="subtext hidden" style="margin-top:20px;">Manual input required.</p>
 
-  <button class="btn-success" onclick="assignValentine()">Assign Valentine</button>
+  <button id="assign-btn" class="btn-success hidden" onclick="assignValentine()">Assign Valentine</button>
     </div>
 
     <!-- STEP 3: REVEAL -->
     <div id="step3" class="hidden">
       <div class="heart">❤️</div>
-      <h1>Error resolved.</h1>
-      <p class="subtext">Valentine successfully assigned.</p>
+      <h1>Valentine candidate identified.</h1>
+      <p class="subtext">System requires confirmation.</p>
 
       <h2 style="margin-top:28px;">
         Will you be my Valentine?
@@ -311,7 +345,8 @@
         Thank you for fixing this critical issue.<br>
         System morale has increased by 100%.
       </p>
-      <p class="subtext">Best fix ever applied.</p>
+      <p class="subtext">Reach out to your valentine for more love.</p>
+      <p class="subtext" style="margin-top:12px; font-size:0.65rem; opacity:0.9;">(Try hovering and dragging pics!)</p>
     </div>
 
   </div>
@@ -320,7 +355,28 @@
   function goToDiagnostics() {
     document.getElementById('step1').classList.add('hidden');
     document.getElementById('step2').classList.remove('hidden');
+    // start the animated diagnostics sequence when step2 is shown
+    setTimeout(runDiagnostics, 120);
   }
+
+  // animate step1 progress bar from 0% to 95% and leave it stuck there
+  function animateStep1Progress() {
+    const bar = document.querySelector('#step1 .progress-bar');
+    if (!bar) return;
+    // ensure starts at 0
+    bar.style.width = '0%';
+    // allow style to apply then animate up to 95%
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      // slower fill so it feels more deliberate
+      bar.style.transition = 'width 3800ms cubic-bezier(.2,.9,.2,1)';
+      bar.style.width = '95%';
+    }));
+  }
+
+  // run the animation immediately so Step 1 shows the stuck progress bar
+  animateStep1Progress();
+
+  // siren removed
 
   function assignValentine() {
     document.getElementById('step2').classList.add('hidden');
@@ -356,7 +412,6 @@
     "IMG_8357.JPG",
     "IMG_8389.jpg",
     "IMG_8396.jpg",
-    "IMG_8402.jpg",
     "IMG_8442.JPG",
     "IMG_8446.jpg",
     "IMG_8447.jpg",
@@ -382,7 +437,7 @@
     "IMG_9900.jpg",
     "IMG_1163.jpg",
     "IMG_0052.jpg",
-    "IMG_5870.jpg"
+    "IMG_5870.jpeg"
   ];
 
   function populateCollage() {
@@ -390,7 +445,18 @@
     if (!collage || collage.dataset.populated) return;
     // Layout images in a responsive grid that covers the viewport.
     // This spaces images so the entire screen is filled while keeping a playful collage feel.
-    const n = collageImages.length;
+    // shuffle the images so each run shows them in a random order
+    function shuffled(arr) {
+      const copy = arr.slice();
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    const images = shuffled(collageImages);
+    const n = images.length;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const aspect = vw / Math.max(vh, 1);
@@ -409,7 +475,7 @@
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (index >= n) break;
-        const file = collageImages[index];
+  const file = images[index];
         const img = document.createElement('img');
         img.src = `images/${file}`;
         img.loading = 'lazy';
@@ -454,6 +520,78 @@
     }
 
     collage.dataset.populated = '1';
+  }
+
+  // --- Animated diagnostics -------------------------------------------------
+  const diagnosticsChecks = [
+    { label: 'Compatibility check…', pass: true },
+    { label: 'Long-distance latency…', pass: true },
+    { label: 'Valentine eligibility…', pass: true },
+    { label: 'Valentine status…', pass: false }
+  ];
+
+  function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+  async function runDiagnostics() {
+    const container = document.getElementById('diagnostics');
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (let i = 0; i < diagnosticsChecks.length; i++) {
+      const chk = diagnosticsChecks[i];
+      const item = document.createElement('div');
+      item.className = 'diag-item';
+
+      const label = document.createElement('div');
+      label.className = 'diag-label';
+      label.textContent = chk.label;
+
+      const track = document.createElement('div');
+      track.className = 'diag-track';
+      const fill = document.createElement('div');
+      fill.className = 'diag-fill';
+      track.appendChild(fill);
+
+      const status = document.createElement('div');
+      status.className = 'diag-status';
+      status.textContent = '';
+
+      item.appendChild(label);
+      item.appendChild(track);
+      item.appendChild(status);
+
+      container.appendChild(item);
+
+      // allow layout
+      await sleep(60);
+
+      // animate fill to 100%
+      fill.style.width = '100%';
+
+      // wait for the transition to finish (match CSS ~700ms)
+      await sleep(820);
+
+      if (chk.pass) {
+        // mark passed
+        status.textContent = 'PASSED';
+        status.classList.add('pass');
+        fill.style.background = '#22c55e';
+        // brief pause before next check
+        await sleep(380);
+        continue;
+      } else {
+        // mark failed
+        status.textContent = 'NOT SET';
+        status.classList.add('fail');
+        fill.style.background = '#ef4444';
+        // reveal manual input prompt and the Assign button, then stop processing
+        const manual = document.getElementById('manual-input');
+        if (manual) manual.classList.remove('hidden');
+        const assignBtn = document.getElementById('assign-btn');
+        if (assignBtn) assignBtn.classList.remove('hidden');
+        break;
+      }
+    }
   }
 
   // enable dragging, double-click to open, and keyboard close for the collage images
